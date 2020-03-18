@@ -557,12 +557,12 @@ def tabulate_angles(words_and_feats):
     latex += "\\begin{array}{" + "c|" + "c"*len(word_dict) + "}\n& "
 
     for word in word_dict.keys():
-        latex += "%s & " % word
+        latex += "\\textrm{%s} & " % word
     
     latex = latex[:-1] + r" \\\hline" + "\n"
 
     for word1 in word_dict.keys():
-        latex += word1
+        latex += "\\textrm{%s}" % word1
         for word2 in word_dict.keys():
             latex += r" & %.1f°" % angle(word_dict[word1], word_dict[word2])
         latex += r" \\" + "\n"
