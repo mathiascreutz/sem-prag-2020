@@ -5,7 +5,99 @@ import pickle
 from mpl_toolkits.mplot3d import Axes3D
 from sklearn.decomposition import PCA
 from sklearn.metrics.pairwise import cosine_distances
+from IPython.display import display, Math, Latex
 
+def angle(vec1, vec2):
+    """ Compute the angle in degrees between two vectors
+        (The vectors are represented as lists or tuples that mark the
+        end points; it is assumed that the starting point is at the
+        origin)
+    """
+    unit1 = vec1 / np.linalg.norm(vec1)
+    unit2 = vec2 / np.linalg.norm(vec2)
+    
+    dot_product = max(-1.0, min(1.0, np.dot(unit1, unit2)))
+    
+    return np.arccos(dot_product) * 180.0 / np.pi
+
+def get_vector_color(i):
+    """ An ordered range of colors used for the vectors """
+
+    colors = [ "black", "blue", "red", "green",
+               "magenta", "cyan", "brown", "yellow" ]
+    
+    return colors[i]
+
+def print_angles_between_vectors(end_coords):
+    """ Print all pairwise angles between a set of vectors """
+    for i in range(len(end_coords)):
+        c1 = get_vector_color(i).upper()
+        for j in range(i + 1, len(end_coords)):
+            c2 = get_vector_color(j).upper()
+            print("The angle between the {:s} and {:s} vector is {:.1f} degrees."
+                      .format(c1, c2, angle(end_coords[i], end_coords[j])))
+
+def plot_vectors_2d(end_coords):
+    """ Plot vectors in a 2d plane and count the angles between the vectors """
+
+    if len(end_coords) < 1 or len(end_coords) > 8:
+        print("Error: You need to plot at least one vector and at most eight vectors.")
+        return
+    
+    fig = plt.figure()
+    
+    # Scale axes
+    plt.axis([min(0, min(end_x for end_x, _ in end_coords))-1,
+              max(0, max(end_x for end_x, _ in end_coords))+1,
+              min(0, min(end_y for _, end_y in end_coords))-1,
+              max(0, max(end_y for _, end_y in end_coords))+1])
+    
+    plt.xlabel("x")
+    plt.ylabel("y")
+    
+    plt.grid(linestyle=":")
+    
+    for i, (end_x, end_y) in enumerate(end_coords):
+        plt.arrow(0, 0, end_x, end_y,
+                  head_width=0.2, 
+                  length_includes_head=True,
+                  color=get_vector_color(i))
+        
+    plt.show()
+    
+    print_angles_between_vectors(end_coords)
+
+def plot_vectors_3d(end_coords):
+    """ Plot vectors in a 3d plane and count the angles between the vectors """
+
+    if len(end_coords) < 1 or len(end_coords) > 8:
+        print("Error: You need to plot at least one vector and at most eight vectors.")
+        return
+    
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    
+    # Scale axes
+    ax.set_xlim3d(min(0, min(end_x for end_x, _, _ in end_coords))-1,
+                  max(0, max(end_x for end_x, _, _ in end_coords))+1)
+    ax.set_ylim3d(min(0, min(end_y for _, end_y, _ in end_coords))-1,
+                  max(0, max(end_y for _, end_y, _ in end_coords))+1)
+    ax.set_zlim3d(min(0, min(end_z for _, _, end_z in end_coords))-1,
+                  max(0, max(end_z for _, _, end_z in end_coords))+1)
+    
+    # Label axes
+    ax.set_xlabel("x")
+    ax.set_ylabel("y")
+    ax.set_zlabel("z")
+    
+    for i, (end_x, end_y, end_z) in enumerate(end_coords):
+        ax.quiver(0, 0, 0, end_x, end_y, end_z,
+                  arrow_length_ratio=0.2,
+                  color=get_vector_color(i))
+        
+    plt.show()
+    
+    print_angles_between_vectors(end_coords)
 
 def plot_3d_binary(features, word_feature_tuples, from_zero=False):
     """For plotting words with three binary features."""
@@ -288,9 +380,9 @@ def plot_sentences_2d(sentences, embeddings, mapping, embedding_fn=None):
     
 def get_embeddings():
     """Load pretrained embeddings and word to int mappings."""
-    with open("../../data/lab3/embedding-matrix-en.npy", "rb") as f:
+    with open("../../data/embedding-matrix-en.npy", "rb") as f:
         M = np.load(f)
-    with open("../../data/lab3/wtoi-en.pickle", "rb") as f:
+    with open("../../data/wtoi-en.pickle", "rb") as f:
         wtoi = pickle.load(f)
         
     return M, wtoi
@@ -455,3 +547,25 @@ def find_true_closest(embeddings, mapping, base, minus, plus, n=5):
     closest_indices = distances.argsort()[-n:][::-1] 
      
     return closest_indices
+
+def to_dict(l):
+    return {k:v for k, v in l}
+
+def tabulate_angles(words_and_feats):
+    word_dict = to_dict(words_and_feats)
+    latex = "\\textbf{Pairwise angles} \\\\\n"
+    latex += "\\begin{array}{" + "c|" + "c"*len(word_dict) + "}\n& "
+
+    for word in word_dict.keys():
+        latex += "%s & " % word
+    
+    latex = latex[:-1] + r" \\\hline" + "\n"
+
+    for word1 in word_dict.keys():
+        latex += word1
+        for word2 in word_dict.keys():
+            latex += r" & %.1f°" % angle(word_dict[word1], word_dict[word2])
+        latex += r" \\" + "\n"
+
+    latex += "\n\\end{array}"
+    display(Math(latex))
