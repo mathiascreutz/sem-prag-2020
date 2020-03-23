@@ -378,7 +378,25 @@ def plot_sentences_2d(sentences, embeddings, mapping, embedding_fn=None):
     plt.legend(legend_texts, bbox_to_anchor=(0.6,0.6))
     
     plt.show()
-    
+
+def rank_sentences_by_similarity(tgt, sents, embeddings,
+                                 mapping, embedding_fn=None):    
+    """ Sort sentences by similarity compared to a given
+    target sentence.
+    """
+    if not embedding_fn:
+        embedding_fn = embed_sentence
+
+    emb_tgt = embedding_fn(tgt, embeddings, mapping).reshape(-1)
+    embs_sents = [ embedding_fn(s, embeddings, mapping).reshape(-1) for s in sents ]
+    angles = [ angle(emb_tgt, e) for e in embs_sents ]
+
+    sorted_sents = sorted(zip(sents, angles), key=lambda item: item[1])
+
+    print('Target sentence: "{:s}"\n'.format(tgt))
+    print("Similarity to other sentences (measured as angle in degrees):")
+    for i, (s, a) in enumerate(sorted_sents):
+        print("#{:d} {:s}: {:.1f}".format(i, s, a))
     
 def get_embeddings():
     """Load pretrained embeddings and word to int mappings."""
@@ -621,14 +639,14 @@ def plot_dendrogram(model, labels):
 
     # Create linkage matrix and then plot the dendrogram
     linkage_matrix = np.column_stack([children, distance, no_of_observations]).astype(float)
-
     
     labels_concat = ["/".join(tup) for tup in zip(labels, [str(l) for l in model.labels_])]
+
     # Plot the corresponding dendrogram
     plt.figure()
 
     dendrogram(linkage_matrix, orientation="left", labels=labels_concat)
-    
+
     plt.show()
 
 def embed(w, M, mapping):
