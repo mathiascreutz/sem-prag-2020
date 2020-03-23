@@ -625,6 +625,8 @@ def plot_dendrogram(model, labels):
     
     labels_concat = ["/".join(tup) for tup in zip(labels, [str(l) for l in model.labels_])]
     # Plot the corresponding dendrogram
+    plt.figure()
+
     dendrogram(linkage_matrix, orientation="left", labels=labels_concat)
     
     plt.show()
