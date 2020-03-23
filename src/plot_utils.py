@@ -1,11 +1,13 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import pickle
+import random
 
 from mpl_toolkits.mplot3d import Axes3D
 from sklearn.decomposition import PCA
 from sklearn.metrics.pairwise import cosine_distances
 from IPython.display import display, Math, Latex
+from scipy.cluster.hierarchy import dendrogram
 
 def angle(vec1, vec2):
     """ Compute the angle in degrees between two vectors
@@ -415,41 +417,50 @@ def embed_sentence(sentence, word_embeddings, mapping):
     return sentence_embedding.reshape(1, -1)
 
 
-def arrow_from(start_x, start_y, end_x, end_y, c="black", linestyle='solid', onlybase=True):
+def arrow_from(start_x, start_y, end_x, end_y, c="black", linestyle='solid'):
     """Plot an arrow in 2d from (start_x, start_y) to (end_x, end_y)."""
-    if onlybase:
-        a = plt.arrow(
-            start_x, start_y, 
-            end_x, end_y,
-            width=0.00002,
-            head_width=0.001, 
-            length_includes_head=True,
-            color=c,
-            linestyle=linestyle
-        )
-    else:
-        a = plt.arrow(
-            start_x, start_y, 
-            end_x, end_y,
-            width=0.001,
-            head_width=0.02, 
-            length_includes_head=True,
-            color=c,
-            linestyle=linestyle
-        )
+    a = plt.arrow(
+        start_x, start_y, 
+        end_x, end_y,
+        width=0.001,
+        head_width=0.02, 
+        length_includes_head=True,
+        color=c,
+        linestyle=linestyle
+    )
     return a
 
-
-def plot_w2v_algebra(embeddings, mapping, base, minus=None, plus=None, result=None):
+def plot_w2v_algebra(embeddings, mapping, base, minus=None, plus=None, results=[]):
     """Plot vector algebra of the form 'base - minus + plus = ?'"""
-    words = []
-    if result:
-        words = [w for w in [base, minus, plus, result] if w]
-    else:
-        words = [w for w in [base, minus, plus, result] if w]
-    
+
+    if not base:
+        print("Error: You need to give a base word.")
+        return
+
+    if not base in mapping:
+        print("Error: out of vocabulary word:", base)
+        return
+
+    if minus and not minus in mapping:
+        print("Error: out of vocabulary word:", minus)
+        return
+
+    if plus and not plus in mapping:
+        print("Error: out of vocabulary word:", plus)
+        return
+
+    if results:
+        for result in results:
+            if result not in mapping:
+                print("Error: out of vocabulary word:", result)
+                return
+
+    words = [w for w in [base, minus, plus] if w]
+    if results:
+        words.extend(results)
+
     indices = [mapping[w] for w in words]
-    
+
     pca = PCA(n_components=2)
     pca_result = pca.fit_transform(embeddings)
 
@@ -464,31 +475,40 @@ def plot_w2v_algebra(embeddings, mapping, base, minus=None, plus=None, result=No
         minus_i = wtoi[minus]
     if plus:
         plus_i = wtoi[plus]
-    if result:
-        equals = wtoi[result]
     
-    if minus:
+    # The vectors to be plotted
+    if minus and plus:
         base_minus_x = comp_1[base_i] - comp_1[minus_i]
         base_minus_y = comp_2[base_i] - comp_2[minus_i]
 
-    if minus and plus:
         final_x = base_minus_x + comp_1[plus_i]
         final_y = base_minus_y + comp_2[plus_i]
-    
-    # closest_ind = find_true_closest(embeddings, mapping, base, minus, plus)
-    # reverse_mapping = {i:w for w, i in mapping.items()}
-    # print("True closest words:", [reverse_mapping[i] for i in closest_ind])
 
-    all_x = np.concatenate([[0], comp_1])
-    all_y = np.concatenate([[0], comp_2])
+    elif minus:
+        final_x = comp_1[base_i] - comp_1[minus_i]
+        final_y = comp_2[base_i] - comp_2[minus_i]
+
+    elif plus:
+        final_x = comp_1[base_i] + comp_1[plus_i]
+        final_y = comp_2[base_i] + comp_2[plus_i]
     
-    if minus:
+    # Plot dots at end of vectors (and origin and result)
+    all_x = np.concatenate([[0], [comp_1[base_i]]])
+    all_y = np.concatenate([[0], [comp_2[base_i]]])
+    
+    if minus and plus:
         all_x = np.concatenate([all_x, [base_minus_x]])
         all_y = np.concatenate([all_y, [base_minus_y]])
         
-    if minus and plus:
+    if minus or plus:
         all_x = np.concatenate([all_x, [final_x]])
         all_y = np.concatenate([all_y, [final_y]])
+
+    if results:
+        for result in results:
+            equals = wtoi[result]
+            all_x = np.concatenate([all_x, [comp_1[equals]]])
+            all_y = np.concatenate([all_y, [comp_2[equals]]])
     
     plt.figure()
     plt.plot(
@@ -499,44 +519,62 @@ def plot_w2v_algebra(embeddings, mapping, base, minus=None, plus=None, result=No
         linestyle="None"
     )
 
-    # origin + base
-    arrow_from(0, 0, comp_1[base_i], comp_2[base_i], onlybase=(not (minus or plus)))
-    if minus:
-        arrow_from(0, 0, comp_1[minus_i], comp_2[minus_i], "red", onlybase=False)
-    if plus:
-        arrow_from(0, 0, comp_1[plus_i], comp_2[plus_i], "blue", onlybase=False)
-    # base - minus
+    # Plot vectors
+    arr1 = arrow_from(0, 0, comp_1[base_i], comp_2[base_i])
+    legend_arrows = [ arr1 ]
+    legend_labels = [ base ]
+
     if minus:
         arr2 = arrow_from(
             comp_1[base_i], 
             comp_2[base_i], 
             -1*comp_1[minus_i], 
             -1*comp_2[minus_i], 
-            "red",
-            onlybase=False
+            "red"
         )
-    # (base - minus) + plus
+        legend_arrows.append(arr2)
+        legend_labels.append(" – " + minus)
+
     if minus and plus:
         arr3 = arrow_from(
             base_minus_x, 
             base_minus_y, 
             comp_1[plus_i], 
             comp_2[plus_i], 
-            "blue",
-            onlybase=False
+            "blue"
         )
-    # origin to final
-    if minus and plus:
-        arr4 = arrow_from(0, 0, final_x, final_y, "orange", linestyle="--", onlybase=False)
+        legend_arrows.append(arr3)
+        legend_labels.append(" + " + plus)
 
-    [plt.text(comp_1[i], comp_2[i], w) for i, w in enumerate(words)]
-
-    if minus and plus:
-        plt.legend(
-            [arr4],
-            [base + " - " + minus + " + " + plus],
-            ncol=2, fancybox=True
+    elif plus:
+        arr3 = arrow_from(
+            comp_1[base_i], 
+            comp_2[base_i], 
+            comp_1[plus_i], 
+            comp_2[plus_i], 
+            "blue"
         )
+        legend_arrows.append(arr3)
+        legend_labels.append(" + " + plus)
+
+    # Origin to final
+    if minus or plus:
+        arr4 = arrow_from(0, 0, final_x, final_y, "orange", linestyle="--")
+        legend_arrows.append(arr4)
+        if minus and plus:
+            legend_labels.append(base + " – " + minus + " + " + plus)
+        elif minus:
+            legend_labels.append(base + " – " + minus)
+        else:
+            legend_labels.append(base + " + " + plus)
+
+    if results:
+        for result in results:
+            equals = wtoi[result]
+            plt.text(comp_1[equals], comp_2[equals], result)
+
+    # Plot legend
+    plt.legend(legend_arrows, legend_labels, fancybox=True)
 
     plt.show()
 
@@ -569,3 +607,96 @@ def tabulate_angles(words_and_feats):
 
     latex += "\n\\end{array}"
     display(Math(latex))
+
+def plot_dendrogram(model, labels):
+    # Children of hierarchical clustering
+    children = model.children_
+
+    # Distances between each pair of children
+    # Since we don't have this information, we can use a uniform one for plotting
+    distance = np.arange(children.shape[0])
+
+    # The number of observations contained in each cluster level
+    no_of_observations = np.arange(2, children.shape[0]+2)
+
+    # Create linkage matrix and then plot the dendrogram
+    linkage_matrix = np.column_stack([children, distance, no_of_observations]).astype(float)
+
+    
+    labels_concat = ["/".join(tup) for tup in zip(labels, [str(l) for l in model.labels_])]
+    # Plot the corresponding dendrogram
+    dendrogram(linkage_matrix, orientation="left", labels=labels_concat)
+    
+    plt.show()
+
+def embed(w, M, mapping):
+    if w not in mapping:
+        raise ValueError("Unfortunately '" + w + "' is not in the vocabulary.")
+    return M[mapping[w]]
+
+def to_feature_matrix(words, M, mapping):
+    return np.concatenate([embed(w, M, mapping).reshape(1, -1) for w in words])
+
+def plot_kmeans(model, words, embeddings, mapping, plot_text=True, small_points=False):
+    clusters = max(model.labels_) + 1
+    
+    pc_1, pc_2 = get_principal_comps(embeddings, 2)
+    
+    fig = plt.figure()
+    for c in range(clusters):
+        tmp = [w for w, cluster_id in zip(words, model.labels_) if cluster_id == c]
+        
+        indices = [mapping[w] for w in tmp]
+            
+        xs = [pc_1[i] for i in indices]
+        ys = [pc_2[i] for i in indices]
+        
+        if small_points:
+            plt.plot(xs, ys, marker="o", markersize=0.5, linestyle="None", label="Cluster " + str(c))
+        else:
+            plt.plot(xs, ys, marker="o", linestyle="None", label="Cluster " + str(c))
+    
+        if plot_text:
+            [point_label(tmp[i], xs[i], ys[i]) for i, word in enumerate(tmp)]
+            
+        if clusters < 14:
+            if small_points:
+                plt.legend(markerscale=7.)
+            else:
+                plt.legend()
+        
+        
+    plt.show()
+
+def sample_clusters(model, words, n, clusters):
+    cluster_to_words = {c:[] for c in range(max(model.labels_) + 1)}
+    [cluster_to_words[cluster_id].append(w) for w, cluster_id in zip(words, model.labels_)]
+    
+    for c in clusters:
+        print("Cluster %d:" % c)
+        print(", ".join(random.sample(cluster_to_words[c], min(n, len(cluster_to_words[c])))), end="\n\n")
+        
+def get_clusters_at_cutoff(model, words, cutoff):
+    children = model.children_[:cutoff + 1]
+    clusters = {i:[w] for i, w in enumerate(words)}
+    
+    tmp = len(words)
+    for c1, c2 in children:
+        if tmp not in clusters:
+            clusters[tmp] = []
+        
+        for c in [c1, c2]:
+            if c < len(words):
+                clusters[tmp].append(words[c])
+            else:
+                clusters[tmp] += clusters[c]
+        
+        clusters[c1] = None
+        clusters[c2] = None
+        
+        tmp +=1
+        
+    clusters = [w for k, w in clusters.items() if w]
+    
+    for i, c in enumerate(clusters):
+        print("Cluster %d: %s" % (i, ", ".join(c)))
